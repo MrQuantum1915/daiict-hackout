@@ -26,35 +26,43 @@ class _CaptureScreenState extends State<CaptureScreen> {
   }
 
   Future<void> _checkPermissions() async {
-    // Check camera permission
-    final cameraStatus = await Permission.camera.status;
-    if (cameraStatus.isDenied) {
-      final result = await Permission.camera.request();
-      if (result.isDenied) {
-        if (mounted) {
-          Navigator.pop(context);
+    try {
+      // Check camera permission
+      final cameraStatus = await Permission.camera.status;
+      if (cameraStatus.isDenied) {
+        final result = await Permission.camera.request();
+        if (result.isDenied) {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+          return;
         }
-        return;
       }
-    }
 
-    // Check location permission
-    final locationStatus = await Permission.location.status;
-    if (locationStatus.isDenied) {
-      final result = await Permission.location.request();
-      if (result.isDenied) {
-        if (mounted) {
-          _showLocationPermissionDialog();
+      // Check location permission
+      final locationStatus = await Permission.location.status;
+      if (locationStatus.isDenied) {
+        final result = await Permission.location.request();
+        if (result.isDenied) {
+          if (mounted) {
+            _showLocationPermissionDialog();
+          }
+          return;
         }
-        return;
       }
+
+      setState(() {
+        _hasLocationPermission = true;
+      });
+
+      await _getCurrentLocation();
+    } catch (e) {
+      debugPrint('Warning: Permission check failed (plugin not available): $e');
+      // Continue without permissions for now
+      setState(() {
+        _hasLocationPermission = true;
+      });
     }
-
-    setState(() {
-      _hasLocationPermission = true;
-    });
-
-    await _getCurrentLocation();
   }
 
   Future<void> _getCurrentLocation() async {
@@ -64,7 +72,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
         _currentPosition = position;
       });
     } catch (e) {
-      debugPrint('Error getting location: $e');
+      debugPrint('Warning: Location service not available: $e');
+      // Set a default location or continue without location
+      setState(() {
+        _currentPosition = null;
+      });
     }
   }
 
@@ -103,12 +115,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Error taking photo: $e');
+      debugPrint('Warning: Camera not available: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to take photo. Please try again.'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: Text('Camera not available on this platform: $e'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Use Gallery',
+              onPressed: () => _pickFromGallery(),
+            ),
           ),
         );
       }
@@ -116,6 +132,43 @@ class _CaptureScreenState extends State<CaptureScreen> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() {
+          _capturedImage = File(image.path);
+        });
+
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ReviewScreen(
+                imageFile: _capturedImage!,
+                location: _currentPosition,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking from gallery: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to pick image from gallery.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

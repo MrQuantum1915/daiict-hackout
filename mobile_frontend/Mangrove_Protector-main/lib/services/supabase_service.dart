@@ -98,6 +98,12 @@ class SupabaseService {
         },
       );
 
+      if (response.statusCode == 404) {
+        // API endpoint not found, return empty list for now
+        print('Warning: Reports API endpoint not found (404). Returning empty list.');
+        return [];
+      }
+      
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch reports: ${response.statusCode}');
       }
