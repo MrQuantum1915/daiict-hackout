@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mangrove_protector/providers/auth_provider.dart';
 import 'package:mangrove_protector/screens/auth/login_screen.dart';
-import 'package:mangrove_protector/screens/home/home_screen.dart';
+import 'package:mangrove_protector/screens/main_navigation.dart';
 import 'package:mangrove_protector/utils/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -56,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     Future.delayed(const Duration(milliseconds: 500), () {
       if (authProvider.isAuthenticated) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
         );
       } else {
         Navigator.of(context).pushReplacement(

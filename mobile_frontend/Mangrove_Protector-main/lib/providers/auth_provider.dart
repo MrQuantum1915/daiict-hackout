@@ -1,336 +1,195 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
+
 import 'package:mangrove_protector/models/user_model.dart';
-import 'package:mangrove_protector/models/community_model.dart';
-import 'package:mangrove_protector/services/database_service.dart';
+import 'package:mangrove_protector/services/supabase_service.dart';
+import 'package:mangrove_protector/services/encryption_service.dart';
 
 class AuthProvider with ChangeNotifier {
   User? _currentUser;
-  Community? _currentCommunity;
-  bool _isLoading = false;
   bool _isAuthenticated = false;
-  final DatabaseService _databaseService = DatabaseService();
-  final Uuid _uuid = const Uuid();
+  bool _hasGeneratedKeys = false;
 
   User? get currentUser => _currentUser;
-  Community? get currentCommunity => _currentCommunity;
-  bool get isLoading => _isLoading;
   bool get isAuthenticated => _isAuthenticated;
+  bool get hasGeneratedKeys => _hasGeneratedKeys;
 
   AuthProvider() {
     _initAuthState();
   }
 
   Future<void> _initAuthState() async {
-    _isLoading = true;
-    notifyListeners();
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? userData = prefs.getString('user_data');
+      // Check if user has backed up private key
+      _hasGeneratedKeys = await EncryptionService.hasBackedUpPrivateKey();
       
-      if (userData != null) {
-        final Map<String, dynamic> userMap = json.decode(userData);
-        _currentUser = User.fromJson(userMap);
-        
-        // Load community data
-        if (_currentUser != null) {
-          _currentCommunity = await _databaseService.getCommunity(_currentUser!.communityId);
+      // Check if user is authenticated
+      final user = SupabaseService.getCurrentUser();
+      if (user != null) {
+        // Fetch user data from database
+        final userData = await SupabaseService.getUser(user.id);
+        if (userData != null) {
+          _currentUser = userData;
           _isAuthenticated = true;
         }
       }
+      
+      notifyListeners();
     } catch (e) {
       debugPrint('Error initializing auth state: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
-  Future<bool> register({
-    required String nickname,
-    required String communityId,
-    String? profileImage,
+  Future<bool> signUp({
+    required String email,
+    required String password,
   }) async {
-    _isLoading = true;
-    notifyListeners();
-
     try {
-      // Check if community exists
-      final community = await _databaseService.getCommunity(communityId);
-      if (community == null) {
-        throw Exception('Community not found');
-      }
-
-      final now = DateTime.now();
-      final user = User(
-        id: _uuid.v4(),
-        nickname: nickname,
-        communityId: communityId,
-        profileImage: profileImage,
-        isAdmin: false,
-        points: 0,
-        createdAt: now,
-        updatedAt: now,
+      final response = await SupabaseService.signUp(
+        email: email,
+        password: password,
       );
 
-      // Save user to local database
-      await _databaseService.insertUser(user);
-
-      // Save user data to shared preferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_data', json.encode(user.toJson()));
-
-      _currentUser = user;
-      _currentCommunity = community;
-      _isAuthenticated = true;
-
-      return true;
-    } catch (e) {
-      debugPrint('Error during registration: $e');
-      return false;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> login({
-    required String nickname,
-    required String communityId,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      // Get community users
-      final users = await _databaseService.getUsersByCommunity(communityId);
+      if (response.user != null) {
+        // Generate encryption keys
+        await generateAndBackupKeys();
+        
+        // Create a basic user object if database fetch fails
+        _currentUser = User(
+          id: response.user!.id,
+          points: 50, // Default credits
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        
+        // Try to fetch user data from database, but don't fail if it doesn't work
+        try {
+          final userData = await SupabaseService.getUser(response.user!.id);
+          if (userData != null) {
+            _currentUser = userData;
+          }
+        } catch (e) {
+          debugPrint('Warning: Could not fetch user data from database: $e');
+          debugPrint('Using default user object. This is normal for new users.');
+        }
+        
+        _isAuthenticated = true;
+        notifyListeners();
+        return true;
+      }
       
-      // Find user with matching nickname
-      final user = users.firstWhere(
-        (u) => u.nickname.toLowerCase() == nickname.toLowerCase(),
-        orElse: () => throw Exception('User not found'),
-      );
-
-      // Get community
-      final community = await _databaseService.getCommunity(communityId);
-      if (community == null) {
-        throw Exception('Community not found');
-      }
-
-      // Save user data to shared preferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_data', json.encode(user.toJson()));
-
-      _currentUser = user;
-      _currentCommunity = community;
-      _isAuthenticated = true;
-
-      return true;
-    } catch (e) {
-      debugPrint('Error during login: $e');
       return false;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    } catch (e) {
+      debugPrint('Error during sign up: $e');
+      return false;
     }
   }
 
-  Future<void> logout() async {
-    _isLoading = true;
-    notifyListeners();
-
+  Future<bool> signIn({
+    required String email,
+    required String password,
+  }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('user_data');
+      final response = await SupabaseService.signIn(
+        email: email,
+        password: password,
+      );
 
+      if (response.user != null) {
+        // Check if user has encryption keys
+        _hasGeneratedKeys = await EncryptionService.hasBackedUpPrivateKey();
+        
+        // Create a basic user object if database fetch fails
+        _currentUser = User(
+          id: response.user!.id,
+          points: 0, // Will be fetched from database
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        
+        // Try to fetch user data from database, but don't fail if it doesn't work
+        try {
+          final userData = await SupabaseService.getUser(response.user!.id);
+          if (userData != null) {
+            _currentUser = userData;
+          }
+        } catch (e) {
+          debugPrint('Warning: Could not fetch user data from database: $e');
+          debugPrint('Using default user object. This is normal for new users.');
+        }
+        
+        _isAuthenticated = true;
+        notifyListeners();
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      debugPrint('Error during sign in: $e');
+      return false;
+    }
+  }
+
+  Future<void> signOut() async {
+    try {
+      await SupabaseService.signOut();
       _currentUser = null;
-      _currentCommunity = null;
       _isAuthenticated = false;
-    } catch (e) {
-      debugPrint('Error during logout: $e');
-    } finally {
-      _isLoading = false;
       notifyListeners();
+    } catch (e) {
+      debugPrint('Error during sign out: $e');
     }
   }
 
-  Future<bool> updateProfile({
-    String? nickname,
-    String? profileImage,
-  }) async {
-    if (_currentUser == null) return false;
-
-    _isLoading = true;
-    notifyListeners();
-
+  Future<void> generateAndBackupKeys() async {
     try {
-      final updatedUser = _currentUser!.copyWith(
-        nickname: nickname,
-        profileImage: profileImage,
-        updatedAt: DateTime.now(),
-      );
-
-      // Update user in local database
-      await _databaseService.updateUser(updatedUser);
-
-      // Update shared preferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_data', json.encode(updatedUser.toJson()));
-
-      _currentUser = updatedUser;
+      final keyPair = await EncryptionService.generateKeyPair();
       
-      return true;
-    } catch (e) {
-      debugPrint('Error updating profile: $e');
-      return false;
-    } finally {
-      _isLoading = false;
+      // Store private key locally
+      await EncryptionService.storePrivateKey(keyPair['privateKey']!);
+      
+      // Store public key locally (for backup)
+      await EncryptionService.storePublicKey(keyPair['publicKey']!);
+      
+      _hasGeneratedKeys = true;
       notifyListeners();
+    } catch (e) {
+      debugPrint('Error generating keys: $e');
+      rethrow;
     }
   }
 
-  Future<bool> createCommunity({
-    required String name,
-    String? description,
-    String? location,
-    String? imageUrl,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
+  Future<String?> getPrivateKey() async {
+    return await EncryptionService.getPrivateKey();
+  }
 
-    try {
-      final now = DateTime.now();
-      final String communityId = _uuid.v4();
-      
-      // Create community first
-      final community = Community(
-        id: communityId,
-        name: name,
-        description: description,
-        location: location,
-        imageUrl: imageUrl,
-        adminIds: [], // Will be updated after user creation
-        createdAt: now,
-        updatedAt: now,
-      );
+  Future<String?> getPublicKey() async {
+    return await EncryptionService.getPublicKey();
+  }
 
-      // Save community to local database
-      await _databaseService.insertCommunity(community);
-      
-      // If there's no current user, create one
-      if (_currentUser == null) {
-        // Create a temporary user for community creation
-        final tempUser = User(
-          id: _uuid.v4(),
-          nickname: 'Admin',
-          communityId: communityId,
-          isAdmin: true,
-          points: 0,
-          createdAt: now,
-          updatedAt: now,
-        );
-        
-        // Save user to local database
-        await _databaseService.insertUser(tempUser);
-        
-        // Update community with admin ID
-        final updatedCommunity = community.copyWith(
-          adminIds: [tempUser.id],
-          updatedAt: now,
-        );
-        await _databaseService.updateCommunity(updatedCommunity);
-        
-        // Save user data to shared preferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_data', json.encode(tempUser.toJson()));
-
-        _currentUser = tempUser;
-        _currentCommunity = updatedCommunity;
-      } else {
-        // Update existing user to be admin of this community
-        final updatedUser = _currentUser!.copyWith(
-          communityId: communityId,
-          isAdmin: true,
-          updatedAt: now,
-        );
-        
-        // Update user in local database
-        await _databaseService.updateUser(updatedUser);
-        
-        // Update community with admin ID
-        final updatedCommunity = community.copyWith(
-          adminIds: [updatedUser.id],
-          updatedAt: now,
-        );
-        await _databaseService.updateCommunity(updatedCommunity);
-        
-        // Update shared preferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_data', json.encode(updatedUser.toJson()));
-
-        _currentUser = updatedUser;
-        _currentCommunity = updatedCommunity;
+  Future<void> refreshUser() async {
+    if (_currentUser != null) {
+      try {
+        final userData = await SupabaseService.getUser(_currentUser!.id);
+        if (userData != null) {
+          _currentUser = userData;
+          notifyListeners();
+        }
+      } catch (e) {
+        debugPrint('Error refreshing user: $e');
       }
-      
-      return true;
-    } catch (e) {
-      debugPrint('Error creating community: $e');
-      return false;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
-  Future<List<Community>> getAllCommunities() async {
-    try {
-      return await _databaseService.getAllCommunities();
-    } catch (e) {
-      debugPrint('Error getting communities: $e');
-      return [];
-    }
-  }
-
-  Future<bool> addPointsToUser(int points) async {
-    if (_currentUser == null) return false;
-
-    try {
-      final updatedUser = _currentUser!.copyWith(
-        points: _currentUser!.points + points,
-        updatedAt: DateTime.now(),
-      );
-
-      // Update user in local database
-      await _databaseService.updateUser(updatedUser);
-
-      // Update shared preferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_data', json.encode(updatedUser.toJson()));
-
-      _currentUser = updatedUser;
-      notifyListeners();
-      
-      return true;
-    } catch (e) {
-      debugPrint('Error adding points to user: $e');
-      return false;
-    }
-  }
-
-  bool isAdmin() {
-    return _currentUser?.isAdmin ?? false;
-  }
-  
-  // Get users by community ID
-  Future<List<User>> getUsersByCommunity(String communityId) async {
-    try {
-      return await _databaseService.getUsersByCommunity(communityId);
-    } catch (e) {
-      debugPrint('Error getting users by community: $e');
-      return [];
+  Future<void> updateUserPoints(int points) async {
+    if (_currentUser != null) {
+      try {
+        final updatedUser = _currentUser!.copyWith(points: points);
+        final savedUser = await SupabaseService.updateUser(updatedUser);
+        _currentUser = savedUser;
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error updating user points: $e');
+      }
     }
   }
 }

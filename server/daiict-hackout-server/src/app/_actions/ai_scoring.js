@@ -60,5 +60,10 @@ export async function ai_scoring(formdata) {
             }
         }
     });
-    return response;
+    const responseData = response.response;
+    return {
+        accuracy_score: responseData.candidates[0].content.parts[0].text.accuracy_score,
+        incident_probability: responseData.candidates[0].content.parts[0].text.incident_probability,
+        analysis_summary: responseData.candidates[0].content.parts[0].text.analysis_summary
+    };
 }

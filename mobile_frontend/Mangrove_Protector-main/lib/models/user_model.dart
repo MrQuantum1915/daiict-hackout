@@ -1,19 +1,15 @@
 class User {
   final String id;
-  final String nickname;
-  final String communityId;
-  final String? profileImage;
-  final bool isAdmin;
+  final String? publicKey;
+  final bool hasBackedUpPrivateKey;
   final int points;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   User({
     required this.id,
-    required this.nickname,
-    required this.communityId,
-    this.profileImage,
-    this.isAdmin = false,
+    this.publicKey,
+    this.hasBackedUpPrivateKey = false,
     this.points = 0,
     required this.createdAt,
     required this.updatedAt,
@@ -22,10 +18,8 @@ class User {
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'],
-      nickname: json['nickname'],
-      communityId: json['communityId'],
-      profileImage: json['profileImage'],
-      isAdmin: json['isAdmin'] ?? false,
+      publicKey: json['publicKey'],
+      hasBackedUpPrivateKey: json['hasBackedUpPrivateKey'] ?? false,
       points: json['points'] ?? 0,
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
@@ -35,10 +29,8 @@ class User {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'nickname': nickname,
-      'communityId': communityId,
-      'profileImage': profileImage,
-      'isAdmin': isAdmin,
+      'publicKey': publicKey,
+      'hasBackedUpPrivateKey': hasBackedUpPrivateKey,
       'points': points,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -47,20 +39,16 @@ class User {
 
   User copyWith({
     String? id,
-    String? nickname,
-    String? communityId,
-    String? profileImage,
-    bool? isAdmin,
+    String? publicKey,
+    bool? hasBackedUpPrivateKey,
     int? points,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return User(
       id: id ?? this.id,
-      nickname: nickname ?? this.nickname,
-      communityId: communityId ?? this.communityId,
-      profileImage: profileImage ?? this.profileImage,
-      isAdmin: isAdmin ?? this.isAdmin,
+      publicKey: publicKey ?? this.publicKey,
+      hasBackedUpPrivateKey: hasBackedUpPrivateKey ?? this.hasBackedUpPrivateKey,
       points: points ?? this.points,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

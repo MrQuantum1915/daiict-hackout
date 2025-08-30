@@ -1,28 +1,29 @@
 enum IllegalActivityType {
-  illegalCutting,
-  wasteDumping,
+  illegalDumping,
+  poaching,
+  deforestation,
   pollution,
-  encroachment,
+  construction,
   other
 }
 
 enum ReportStatus {
-  pending,
-  underInvestigation,
-  resolved,
-  dismissed
+  submitted,
+  pendingNgoVerification,
+  approved,
+  rejected,
+  flagged
 }
 
 class IllegalActivity {
   final String id;
   final String userId;
-  final String communityId;
   final IllegalActivityType activityType;
   final String description;
   final double latitude;
   final double longitude;
   final String? imageUrl;
-  final ReportStatus status;
+  final String status; // Changed to String to match database
   final DateTime reportedDate;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -31,17 +32,18 @@ class IllegalActivity {
   final DateTime? verifiedAt;
   final String? adminNotes;
   final String? resolutionNotes;
+  final double? aiScore;
+  final String? aiExplanation;
 
   IllegalActivity({
     required this.id,
     required this.userId,
-    required this.communityId,
     required this.activityType,
     required this.description,
     required this.latitude,
     required this.longitude,
     this.imageUrl,
-    this.status = ReportStatus.pending,
+    this.status = 'Submitted',
     required this.reportedDate,
     required this.createdAt,
     required this.updatedAt,
@@ -50,13 +52,14 @@ class IllegalActivity {
     this.verifiedAt,
     this.adminNotes,
     this.resolutionNotes,
+    this.aiScore,
+    this.aiExplanation,
   });
 
   factory IllegalActivity.fromJson(Map<String, dynamic> json) {
     return IllegalActivity(
       id: json['id'],
       userId: json['userId'],
-      communityId: json['communityId'],
       activityType: IllegalActivityType.values.firstWhere(
         (e) => e.toString() == 'IllegalActivityType.${json['activityType']}',
         orElse: () => IllegalActivityType.other,
@@ -65,10 +68,7 @@ class IllegalActivity {
       latitude: json['latitude'],
       longitude: json['longitude'],
       imageUrl: json['imageUrl'],
-      status: ReportStatus.values.firstWhere(
-        (e) => e.toString() == 'ReportStatus.${json['status']}',
-        orElse: () => ReportStatus.pending,
-      ),
+      status: json['status'] ?? 'Submitted',
       reportedDate: DateTime.parse(json['reportedDate']),
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
@@ -79,6 +79,8 @@ class IllegalActivity {
           : null,
       adminNotes: json['adminNotes'],
       resolutionNotes: json['resolutionNotes'],
+      aiScore: json['aiScore']?.toDouble(),
+      aiExplanation: json['aiExplanation'],
     );
   }
 
@@ -86,13 +88,12 @@ class IllegalActivity {
     return {
       'id': id,
       'userId': userId,
-      'communityId': communityId,
       'activityType': activityType.toString().split('.').last,
       'description': description,
       'latitude': latitude,
       'longitude': longitude,
       'imageUrl': imageUrl,
-      'status': status.toString().split('.').last,
+      'status': status,
       'reportedDate': reportedDate.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -101,19 +102,20 @@ class IllegalActivity {
       'verifiedAt': verifiedAt?.toIso8601String(),
       'adminNotes': adminNotes,
       'resolutionNotes': resolutionNotes,
+      'aiScore': aiScore,
+      'aiExplanation': aiExplanation,
     };
   }
 
   IllegalActivity copyWith({
     String? id,
     String? userId,
-    String? communityId,
     IllegalActivityType? activityType,
     String? description,
     double? latitude,
     double? longitude,
     String? imageUrl,
-    ReportStatus? status,
+    String? status,
     DateTime? reportedDate,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -122,11 +124,12 @@ class IllegalActivity {
     DateTime? verifiedAt,
     String? adminNotes,
     String? resolutionNotes,
+    double? aiScore,
+    String? aiExplanation,
   }) {
     return IllegalActivity(
       id: id ?? this.id,
       userId: userId ?? this.userId,
-      communityId: communityId ?? this.communityId,
       activityType: activityType ?? this.activityType,
       description: description ?? this.description,
       latitude: latitude ?? this.latitude,
@@ -141,6 +144,8 @@ class IllegalActivity {
       verifiedAt: verifiedAt ?? this.verifiedAt,
       adminNotes: adminNotes ?? this.adminNotes,
       resolutionNotes: resolutionNotes ?? this.resolutionNotes,
+      aiScore: aiScore ?? this.aiScore,
+      aiExplanation: aiExplanation ?? this.aiExplanation,
     );
   }
 } 

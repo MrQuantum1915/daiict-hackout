@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { ai_scoring } from "../_actions/ai_scoring";
-import { store_in_database } from "../_actions/store_in_database";
+import { store_in_database } from "../_actions/store_in_encrypted_database";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -29,11 +29,13 @@ export async function POST(request) {
 
     const formData = await request.formData();
 
-    const userId = formData.get('userId');
-    const reportData = formData.get('reportData');
+    const category = formData.get('category');
+    const location = formData.get('location');
+    const description = formData.get('description');
+    const public_key = formData.get('public_key');
     const file = formData.get('file');
 
-    if (!userId || !reportData || !file) {
+    if (!category || !location || !description || !public_key || !file) {
       return new Response("Invalid input", { status: 400 });
     }
 

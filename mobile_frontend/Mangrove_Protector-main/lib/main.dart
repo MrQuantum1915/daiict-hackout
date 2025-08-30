@@ -2,18 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:mangrove_protector/providers/auth_provider.dart';
-import 'package:mangrove_protector/providers/tree_provider.dart';
 import 'package:mangrove_protector/providers/illegal_activity_provider.dart';
 import 'package:mangrove_protector/providers/reward_provider.dart';
 import 'package:mangrove_protector/providers/connectivity_provider.dart';
 import 'package:mangrove_protector/screens/splash_screen.dart';
 import 'package:mangrove_protector/utils/app_theme.dart';
 import 'package:mangrove_protector/utils/localization.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Initialize services here
-  
+  await Supabase.initialize(
+    url: 'https://pfpleplfotblkykcddwd.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBmcGxlcGxmb3RibGt5a2NkZHdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDQ0ODEsImV4cCI6MjA3MjA4MDQ4MX0.txp_L0riPzioSCPttCF0ZwXkAFrCWdmlFauX0xi-q-8',
+  );
   runApp(const MyApp());
 }
 
@@ -25,7 +28,6 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => TreeProvider()),
         ChangeNotifierProvider(create: (_) => IllegalActivityProvider()),
         ChangeNotifierProvider(create: (_) => RewardProvider()),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),

@@ -1,51 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mangrove_protector/models/illegal_activity_model.dart';
-import 'package:mangrove_protector/services/database_service.dart';
+import 'package:mangrove_protector/services/supabase_service.dart';
 
 class IllegalActivityProvider with ChangeNotifier {
   List<IllegalActivity> _activities = [];
   bool _isLoading = false;
-  final DatabaseService _databaseService = DatabaseService();
   final Uuid _uuid = const Uuid();
 
-  List<IllegalActivity> get activities => _activities;
+  List<IllegalActivity> get activities => [..._activities];
   bool get isLoading => _isLoading;
 
-  // Get activities by user
-  List<IllegalActivity> getActivitiesByUser(String userId) {
-    return _activities.where((activity) => activity.userId == userId).toList();
-  }
-
-  // Get activities by community
-  List<IllegalActivity> getActivitiesByCommunity(String communityId) {
-    return _activities.where((activity) => activity.communityId == communityId).toList();
-  }
-
-  // Get pending activities (for admins)
-  List<IllegalActivity> getPendingActivities() {
-    return _activities.where((activity) => activity.status == ReportStatus.pending).toList();
-  }
-
-  // Load activities from database
-  Future<void> loadActivities() async {
+  Future<void> loadUserReports(String userId) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      _activities = await _databaseService.getAllIllegalActivities();
+      _activities = await SupabaseService.getUserReports(userId);
     } catch (e) {
-      debugPrint('Error loading activities: $e');
+      debugPrint('Error loading user reports: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // Add new illegal activity report
   Future<bool> addActivity({
     required String userId,
-    required String communityId,
     required IllegalActivityType activityType,
     required String description,
     required double latitude,
@@ -57,26 +38,26 @@ class IllegalActivityProvider with ChangeNotifier {
 
     try {
       final now = DateTime.now();
-      final activity = IllegalActivity(
+      final report = IllegalActivity(
         id: _uuid.v4(),
         userId: userId,
-        communityId: communityId,
         activityType: activityType,
         description: description,
         latitude: latitude,
         longitude: longitude,
         imageUrl: imageUrl,
+        status: 'Submitted',
         reportedDate: now,
         createdAt: now,
         updatedAt: now,
       );
 
-      // Save to database
-      await _databaseService.insertIllegalActivity(activity);
-
+      // Submit report to server (this handles encryption and AI validation)
+      final savedReport = await SupabaseService.createReport(report);
+      
       // Add to local list
-      _activities.add(activity);
-
+      _activities.insert(0, savedReport);
+      
       return true;
     } catch (e) {
       debugPrint('Error adding activity: $e');
@@ -87,30 +68,27 @@ class IllegalActivityProvider with ChangeNotifier {
     }
   }
 
-  // Update activity status (for admins)
   Future<bool> updateActivityStatus({
-    required String activityId,
-    required ReportStatus status,
+    required String reportId,
+    required String status,
     String? adminNotes,
-    String? resolutionNotes,
   }) async {
     try {
-      final activityIndex = _activities.indexWhere((a) => a.id == activityId);
-      if (activityIndex == -1) return false;
+      final reportIndex = _activities.indexWhere((activity) => activity.id == reportId);
+      if (reportIndex == -1) return false;
 
-      final activity = _activities[activityIndex];
-      final updatedActivity = activity.copyWith(
+      final report = _activities[reportIndex];
+      final updatedReport = report.copyWith(
         status: status,
         adminNotes: adminNotes,
-        resolutionNotes: resolutionNotes,
         updatedAt: DateTime.now(),
       );
 
-      // Update in database
-      await _databaseService.updateIllegalActivity(updatedActivity);
-
-      // Update in local list
-      _activities[activityIndex] = updatedActivity;
+      // Update in Supabase
+      final savedReport = await SupabaseService.updateReport(updatedReport);
+      
+      // Update local list
+      _activities[reportIndex] = savedReport;
       notifyListeners();
 
       return true;
@@ -120,67 +98,61 @@ class IllegalActivityProvider with ChangeNotifier {
     }
   }
 
-  // Verify activity (for admins)
-  Future<bool> verifyActivity({
-    required String activityId,
-    required String verifiedBy,
+  Future<bool> updateAIScore({
+    required String reportId,
+    required double aiScore,
+    required String aiExplanation,
   }) async {
     try {
-      final activityIndex = _activities.indexWhere((a) => a.id == activityId);
-      if (activityIndex == -1) return false;
+      final reportIndex = _activities.indexWhere((activity) => activity.id == reportId);
+      if (reportIndex == -1) return false;
 
-      final activity = _activities[activityIndex];
-      final updatedActivity = activity.copyWith(
-        isVerified: true,
-        verifiedBy: verifiedBy,
-        verifiedAt: DateTime.now(),
+      final report = _activities[reportIndex];
+      final updatedReport = report.copyWith(
+        aiScore: aiScore,
+        aiExplanation: aiExplanation,
         updatedAt: DateTime.now(),
       );
 
-      // Update in database
-      await _databaseService.updateIllegalActivity(updatedActivity);
-
-      // Update in local list
-      _activities[activityIndex] = updatedActivity;
+      // Update in Supabase
+      final savedReport = await SupabaseService.updateReport(updatedReport);
+      
+      // Update local list
+      _activities[reportIndex] = savedReport;
       notifyListeners();
 
       return true;
     } catch (e) {
-      debugPrint('Error verifying activity: $e');
+      debugPrint('Error updating AI score: $e');
       return false;
     }
   }
 
-  // Get activity by ID
-  IllegalActivity? getActivityById(String id) {
-    try {
-      return _activities.firstWhere((activity) => activity.id == id);
-    } catch (e) {
-      return null;
-    }
+  void clearActivities() {
+    _activities.clear();
+    notifyListeners();
   }
 
-  // Get statistics
-  Map<String, int> getActivityStatistics() {
-    final stats = <String, int>{};
-    
-    for (final activity in _activities) {
-      final type = activity.activityType.toString().split('.').last;
-      stats[type] = (stats[type] ?? 0) + 1;
-    }
-    
-    return stats;
+  // Get activities by status
+  List<IllegalActivity> getActivitiesByStatus(String status) {
+    return _activities.where((activity) => activity.status == status).toList();
   }
 
-  // Get status statistics
-  Map<String, int> getStatusStatistics() {
-    final stats = <String, int>{};
-    
-    for (final activity in _activities) {
-      final status = activity.status.toString().split('.').last;
-      stats[status] = (stats[status] ?? 0) + 1;
-    }
-    
-    return stats;
+  // Get pending activities count
+  int getPendingActivitiesCount() {
+    return _activities.where((activity) => 
+      activity.status == 'Submitted' || 
+      activity.status == 'Pending NGO Verification'
+    ).length;
+  }
+
+  // Get approved activities count
+  int getApprovedActivitiesCount() {
+    return _activities.where((activity) => activity.status == 'Approved').length;
+  }
+
+  // Get total activities count
+  int getTotalActivitiesCount() {
+    return _activities.length;
   }
 } 

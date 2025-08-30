@@ -1,8 +1,7 @@
 enum RewardType {
-  planting,
-  maintenance,
-  verification,
   reporting,
+  verification,
+  milestone,
   other
 }
 
@@ -16,22 +15,21 @@ enum RewardStatus {
 class Reward {
   final String id;
   final String userId;
-  final String communityId;
   final int points;
   final RewardType type;
   final String? description;
-  final String? relatedEntityId; // Tree ID or Maintenance ID
+  final String? relatedEntityId; // Report ID or other entity ID
   final RewardStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? approvedBy;
   final DateTime? approvedAt;
   final DateTime? redeemedAt;
+  final String? adminNotes;
 
   Reward({
     required this.id,
     required this.userId,
-    required this.communityId,
     required this.points,
     required this.type,
     this.description,
@@ -42,13 +40,13 @@ class Reward {
     this.approvedBy,
     this.approvedAt,
     this.redeemedAt,
+    this.adminNotes,
   });
 
   factory Reward.fromJson(Map<String, dynamic> json) {
     return Reward(
       id: json['id'],
       userId: json['userId'],
-      communityId: json['communityId'],
       points: json['points'],
       type: RewardType.values.firstWhere(
         (e) => e.toString() == 'RewardType.${json['type']}',
@@ -69,6 +67,7 @@ class Reward {
       redeemedAt: json['redeemedAt'] != null
           ? DateTime.parse(json['redeemedAt'])
           : null,
+      adminNotes: json['adminNotes'],
     );
   }
 
@@ -76,7 +75,6 @@ class Reward {
     return {
       'id': id,
       'userId': userId,
-      'communityId': communityId,
       'points': points,
       'type': type.toString().split('.').last,
       'description': description,
@@ -87,13 +85,13 @@ class Reward {
       'approvedBy': approvedBy,
       'approvedAt': approvedAt?.toIso8601String(),
       'redeemedAt': redeemedAt?.toIso8601String(),
+      'adminNotes': adminNotes,
     };
   }
 
   Reward copyWith({
     String? id,
     String? userId,
-    String? communityId,
     int? points,
     RewardType? type,
     String? description,
@@ -104,11 +102,11 @@ class Reward {
     String? approvedBy,
     DateTime? approvedAt,
     DateTime? redeemedAt,
+    String? adminNotes,
   }) {
     return Reward(
       id: id ?? this.id,
       userId: userId ?? this.userId,
-      communityId: communityId ?? this.communityId,
       points: points ?? this.points,
       type: type ?? this.type,
       description: description ?? this.description,
@@ -119,13 +117,13 @@ class Reward {
       approvedBy: approvedBy ?? this.approvedBy,
       approvedAt: approvedAt ?? this.approvedAt,
       redeemedAt: redeemedAt ?? this.redeemedAt,
+      adminNotes: adminNotes ?? this.adminNotes,
     );
   }
 }
 
 class RewardItem {
   final String id;
-  final String communityId;
   final String name;
   final String? description;
   final String? imageUrl;
@@ -137,7 +135,6 @@ class RewardItem {
 
   RewardItem({
     required this.id,
-    required this.communityId,
     required this.name,
     this.description,
     this.imageUrl,
@@ -148,36 +145,9 @@ class RewardItem {
     required this.updatedAt,
   });
 
-  RewardItem copyWith({
-    String? id,
-    String? communityId,
-    String? name,
-    String? description,
-    String? imageUrl,
-    int? pointsCost,
-    int? availableQuantity,
-    bool? isActive,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return RewardItem(
-      id: id ?? this.id,
-      communityId: communityId ?? this.communityId,
-      name: name ?? this.name,
-      description: description ?? this.description,
-      imageUrl: imageUrl ?? this.imageUrl,
-      pointsCost: pointsCost ?? this.pointsCost,
-      availableQuantity: availableQuantity ?? this.availableQuantity,
-      isActive: isActive ?? this.isActive,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
-  }
-
   factory RewardItem.fromJson(Map<String, dynamic> json) {
     return RewardItem(
       id: json['id'],
-      communityId: json['communityId'],
       name: json['name'],
       description: json['description'],
       imageUrl: json['imageUrl'],
@@ -192,7 +162,6 @@ class RewardItem {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'communityId': communityId,
       'name': name,
       'description': description,
       'imageUrl': imageUrl,
@@ -202,5 +171,29 @@ class RewardItem {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
+  }
+
+  RewardItem copyWith({
+    String? id,
+    String? name,
+    String? description,
+    String? imageUrl,
+    int? pointsCost,
+    int? availableQuantity,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return RewardItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      pointsCost: pointsCost ?? this.pointsCost,
+      availableQuantity: availableQuantity ?? this.availableQuantity,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
 }
