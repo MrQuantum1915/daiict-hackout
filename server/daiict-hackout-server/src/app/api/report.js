@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// CORS headers for cross-origin requests
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -15,7 +15,7 @@ const corsHeaders = {
   'Content-Type': 'application/json',
 };
 
-// Handle OPTIONS request for CORS preflight
+
 export async function OPTIONS(request) {
   return new Response(null, {
     status: 200,
@@ -52,7 +52,7 @@ export async function POST(request) {
     const userId = formData.get('userId');
     const file = formData.get('file');
 
-    // Make file optional for now
+    
     if (!category || !location || !description || !public_key) {
       return new Response(JSON.stringify({ error: 'Invalid input - missing required fields' }), { 
         status: 400,
@@ -63,13 +63,13 @@ export async function POST(request) {
     console.log('Received report data:', {
       category,
       location,
-      description: description.substring(0, 50) + '...', // Log first 50 chars
-      public_key: public_key.substring(0, 20) + '...', // Log first 20 chars
+      description: description.substring(0, 50) + '...', 
+      public_key: public_key.substring(0, 20) + '...', 
       userId,
       hasFile: !!file
     });
 
-    //ai validation
+    
     const result = await ai_scoring(formData);
     if (!result) {
       return new Response(JSON.stringify({ error: 'AI scoring failed' }), { 
@@ -78,7 +78,7 @@ export async function POST(request) {
       });
     }
 
-    //store in db
+    
     const { data, error: dbError } = await store_in_database(formData, result, token);
 
     if (dbError) {
